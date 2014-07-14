@@ -21,7 +21,8 @@ class Worker(threading.Thread):
         self.queue = work_queue
 
     def __del__(self):
-        self.smtpObj.close()
+        if hasattr(self, 'smtpObj'):
+            self.smtpObj.close()
 
     def run(self):
         while True:
@@ -71,12 +72,25 @@ def main():
     for filename in mimes:
         queue.put(filename)
 
+    workers = []
     for n in xrange(args.workers):
-        worker = Worker(queue, args.ip, args.sender, args.to)
-        worker.start()
+        try:
+            worker = Worker(queue, args.ip, args.sender, args.to)
+        except:
+            print('Unable to start worker')
+            continue
+        else:
+            workers.append(worker)
+            worker.start()
 
-    # Wait until queue is empty
-    queue.join()
+    if workers:
+        # Wait until queue is empty
+        queue.join()
+    else:
+        print('No workers found')
+        return -1
+
+    return 0
 
 
 if __name__ == '__main__':
