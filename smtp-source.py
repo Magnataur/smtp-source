@@ -9,6 +9,8 @@ import os
 import threading
 import Queue
 import argparse
+import io
+import time
 
 
 class Worker(threading.Thread):
@@ -33,7 +35,7 @@ class Worker(threading.Thread):
 
             self.queue.task_done()
             try:
-                with open(f_name, 'rb') as fp:
+                with io.FileIO(f_name, 'rb') as fp:
                     mime = fp.read()
             except IOError:
                 print('Error: unable to open: %s' % f_name)
@@ -59,6 +61,9 @@ def main():
 
     args = parser.parse_args()
 
+    if args.verbose:
+        start = time.time()
+
     try:
         mimes = os.listdir(args.mimes)
     except OSError:
@@ -66,11 +71,12 @@ def main():
         return -1
 
     if args.verbose:
-        print('Got %s mimes' % len(mimes))
+        print('Got list of %s mimes' % len(mimes))
+        print('T: {}'.format(time.time() - start))
 
     queue = Queue.Queue()
     for filename in mimes:
-        queue.put(filename)
+        queue.put(os.path.join(args.mimes, filename))
 
     workers = []
     for n in xrange(args.workers):
@@ -83,12 +89,20 @@ def main():
             workers.append(worker)
             worker.start()
 
+    if args.verbose:
+        print('All workers started')
+        print('T: {}'.format(time.time() - start))
+
     if workers:
         # Wait until queue is empty
         queue.join()
     else:
         print('No workers found')
         return -1
+
+    if args.verbose:
+        print('Job done')
+        print('T: {}'.format(time.time() - start))
 
     return 0
 
