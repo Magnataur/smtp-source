@@ -9,8 +9,7 @@ import os
 import threading
 import Queue
 import argparse
-import io
-import time
+import logging
 
 
 class Worker(threading.Thread):
@@ -35,16 +34,16 @@ class Worker(threading.Thread):
 
             self.queue.task_done()
             try:
-                with io.FileIO(f_name, 'rb') as fp:
+                with open(f_name, 'rb') as fp:
                     mime = fp.read()
-            except IOError:
-                print('Error: unable to open: %s' % f_name)
+            except IOError as e:
+                logging.error('Unable to open mime -- {}'.format(e))
                 continue
 
             try:
                 self.smtpObj.sendmail(self.sender, self.receivers, mime)
-            except smtplib.SMTPException:
-                print('Error: unable to send email')
+            except smtplib.SMTPException as e:
+                logging.error('Unable to send email -- {}'.format(e))
                 continue
 
         return 0
@@ -58,21 +57,24 @@ def main():
     parser.add_argument('-i', '--ip', default='127.0.0.1', help='smtp server ip address')
     parser.add_argument('-s', '--sender', default='test@mail', help='mail sender')
     parser.add_argument('-t', '--to', nargs='*', default=['yoda@klms'], help='mail receiver')
-
     args = parser.parse_args()
 
     if args.verbose:
-        start = time.time()
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    logging.basicConfig(format='%(asctime)s.%(msecs)d %(levelname)-8s %(message)s',
+                        datefmt='%H:%M:%S',
+                        level=log_level)
 
     try:
         mimes = os.listdir(args.mimes)
-    except OSError:
-        print('Unable to open mimes folder - %s' % args.mimes)
+    except OSError as e:
+        logging.error('Unable to open mimes folder -- {}'.format(e))
         return -1
-
-    if args.verbose:
-        print('Got list of %s mimes' % len(mimes))
-        print('T: {}'.format(time.time() - start))
+    else:
+        logging.info('Got list of %s mimes' % len(mimes))
 
     queue = Queue.Queue()
     for filename in mimes:
@@ -83,27 +85,22 @@ def main():
         try:
             worker = Worker(queue, args.ip, args.sender, args.to)
         except:
-            print('Unable to start worker')
+            logging.error('Unable to start worker')
             continue
         else:
             workers.append(worker)
             worker.start()
 
-    if args.verbose:
-        print('All workers started')
-        print('T: {}'.format(time.time() - start))
+    logging.info('All workers started')
 
     if workers:
         # Wait until queue is empty
         queue.join()
     else:
-        print('No workers found')
+        logging.error('No workers found')
         return -1
 
-    if args.verbose:
-        print('Job done')
-        print('T: {}'.format(time.time() - start))
-
+    logging.info('Job done')
     return 0
 
 
