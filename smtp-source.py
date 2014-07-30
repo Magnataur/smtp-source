@@ -12,11 +12,22 @@ import argparse
 import logging
 
 
+class WorkerException(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
 class Worker(threading.Thread):
     def __init__(self, work_queue, server, sender, to):
         super(Worker, self).__init__()
 
-        self.smtpObj = smtplib.SMTP(server)
+        try:
+            self.smtpObj = smtplib.SMTP(server)
+        except smtplib.SMTPException as e:
+            raise WorkerException(e)
         self.receivers = to
         self.sender = sender
         self.queue = work_queue
@@ -84,17 +95,16 @@ def main():
     for n in xrange(args.workers):
         try:
             worker = Worker(queue, args.ip, args.sender, args.to)
-        except:
-            logging.error('Unable to start worker')
+        except WorkerException as e:
+            logging.error('Unable to start worker -- {}'.format(e))
             continue
         else:
             workers.append(worker)
             worker.start()
 
-    logging.info('All workers started')
-
     if workers:
         # Wait until queue is empty
+        logging.info('All workers started')
         queue.join()
     else:
         logging.error('No workers found')
